@@ -1,0 +1,511 @@
+#include <GL/glut.h>
+#include <cmath>
+#include <vector>
+#include <string>
+#include <map>
+#include <cctype>
+
+struct Atom {
+    float x, y, z;
+    float r, g, b;
+    float radius;
+    std::string type;
+};
+
+struct Molecule {
+    std::string name;
+    std::vector<Atom> atoms;
+    std::vector<std::pair<int, int>> bonds;
+};
+
+struct ColorItem {
+    const char* label;
+    float r, g, b;
+};
+
+
+std::map<char, Molecule> moleculeMap;
+std::map<std::string, std::string> moleculeNamesES;
+Molecule currentMolecule;
+std::string currentLabel = "H2O";
+
+float zoom = 5.0f;
+float rotX = 0.0f, rotY = 0.0f;
+float lastX, lastY;
+bool isDragging = false;
+int windowWidth = 1000, windowHeight = 700;
+
+Atom makeAtom(float x, float y, float z, const std::string& element) {
+    Atom atom;
+    atom.x = x;
+    atom.y = y;
+    atom.z = z;
+    atom.type = element;
+
+    if (element == "H") {
+        atom.r = 1.0f; atom.g = 1.0f; atom.b = 1.0f;
+        atom.radius = 0.2f;
+    } else if (element == "O") {
+        atom.r = 1.0f; atom.g = 0.0f; atom.b = 0.0f;
+        atom.radius = 0.3f;
+    } else if (element == "C") {
+        atom.r = 0.2f; atom.g = 0.2f; atom.b = 0.2f;
+        atom.radius = 0.3f;
+    } else if (element == "N") {
+        atom.r = 0.0f; atom.g = 0.0f; atom.b = 1.0f;
+        atom.radius = 0.3f;
+    } else if (element == "Na") {
+        atom.r = 0.4f; atom.g = 0.4f; atom.b = 1.0f;
+        atom.radius = 0.25f;        
+    } else if (element == "Cl") {
+        atom.r = 0.0f; atom.g = 1.0f; atom.b = 0.0f;
+        atom.radius = 0.3f;
+    } else {
+        atom.r = 0.9f; atom.g = 0.5f; atom.b = 0.5f;
+        atom.radius = 0.25f;
+    }
+
+    return atom;
+}
+
+void setupMolecules() {
+    moleculeMap.clear();
+    moleculeNamesES.clear();
+
+    Molecule water = {"H2O"};
+    water.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "O"),
+        makeAtom(0.9572f, 0.0f, 0.0f, "H"),
+        makeAtom(-0.239987f, 0.926627f, 0.0f, "H")
+    };
+    water.bonds = {{0,1}, {0,2}};
+    moleculeMap['Q'] = water;
+    moleculeNamesES["H2O"] = "Agua";
+
+    Molecule benzene = {"C6H6"};
+    benzene.atoms = {
+        makeAtom(1.0f, 0.0f, 0.0f, "C"),
+        makeAtom(0.5f, 0.866f, 0.0f, "C"),
+        makeAtom(-0.5f, 0.866f, 0.0f, "C"),
+        makeAtom(-1.0f, 0.0f, 0.0f, "C"),
+        makeAtom(-0.5f, -0.866f, 0.0f, "C"),
+        makeAtom(0.5f, -0.866f, 0.0f, "C"),
+        makeAtom(1.6f, 0.0f, 0.0f, "H"),
+        makeAtom(0.8f, 1.386f, 0.0f, "H"),
+        makeAtom(-0.8f, 1.386f, 0.0f, "H"),
+        makeAtom(-1.6f, 0.0f, 0.0f, "H"),
+        makeAtom(-0.8f, -1.386f, 0.0f, "H"),
+        makeAtom(0.8f, -1.386f, 0.0f, "H")
+    };
+    benzene.bonds = {
+        {0,1}, {1,2}, {2,3}, {3,4}, {4,5}, {5,0},
+        {0,6}, {1,7}, {2,8}, {3,9}, {4,10}, {5,11}
+    };
+    moleculeMap['W'] = benzene;
+    moleculeNamesES["C6H6"] = "Benceno";
+
+
+    Molecule co2 = {"CO2"};
+    co2.atoms = {
+        makeAtom(-1.16f, 0.0f, 0.0f, "O"),
+        makeAtom(0.0f, 0.0f, 0.0f, "C"),
+        makeAtom(1.16f, 0.0f, 0.0f, "O")
+    };
+    co2.bonds = {{0,1}, {1,2}};
+    moleculeMap['E'] = co2;
+    moleculeNamesES["CO2"] = "Dióxido de Carbono";
+
+    Molecule ch4 = {"CH4"};
+    ch4.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "C"),
+        makeAtom(0.629118f, 0.629118f, 0.629118f, "H"),
+        makeAtom(-0.629118f, -0.629118f, 0.629118f, "H"),
+        makeAtom(-0.629118f, 0.629118f, -0.629118f, "H"),
+        makeAtom(0.629118f, -0.629118f, -0.629118f, "H")
+    };
+    ch4.bonds = {{0,1}, {0,2}, {0,3}, {0,4}};
+    moleculeMap['R'] = ch4;
+    moleculeNamesES["CH4"] = "Metano";
+
+    Molecule nh3 = {"NH3"};
+    nh3.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "N"),
+        makeAtom(0.9377f, 0.0f, -0.3816f, "H"),
+        makeAtom(-0.4688f, 0.8123f, -0.3816f, "H"),
+        makeAtom(-0.4688f, -0.8123f, -0.3816f, "H")
+    };
+    nh3.bonds = {{0,1}, {0,2}, {0,3}};
+    moleculeMap['T'] = nh3;
+    moleculeNamesES["NH3"] = "Amoníaco";
+
+    Molecule o2 = {"O2"};
+    o2.atoms = {
+        makeAtom(-0.6f, 0.0f, 0.0f, "O"),
+        makeAtom(0.6f, 0.0f, 0.0f, "O")
+    };
+    o2.bonds = {{0,1}};
+    moleculeMap['Y'] = o2;
+    moleculeNamesES["O2"] = "Oxígeno";
+
+    Molecule h2 = {"H2"};
+    h2.atoms = {
+        makeAtom(-0.37f, 0.0f, 0.0f, "H"),
+        makeAtom(0.37f, 0.0f, 0.0f, "H")
+    };
+    h2.bonds = {{0,1}};
+    moleculeMap['U'] = h2;
+    moleculeNamesES["H2"] = "Hidrógeno";
+
+    Molecule n2 = {"N2"};
+    n2.atoms = {
+        makeAtom(-0.55f, 0.0f, 0.0f, "N"),
+        makeAtom(0.55f, 0.0f, 0.0f, "N")
+    };
+    n2.bonds = {{0,1}};
+    moleculeMap['I'] = n2;
+    moleculeNamesES["N2"] = "Nitrógeno";
+
+    Molecule h2so4 = {"H2SO4"};
+    h2so4.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "S"),   
+        makeAtom(1.0f, 0.0f, 0.0f, "O"),  
+        makeAtom(-1.0f, 0.0f, 0.0f, "O"),  
+        makeAtom(0.0f, 1.0f, 0.0f, "O"),   
+        makeAtom(0.0f, -1.0f, 0.0f, "O"),  
+        makeAtom(0.0f, 1.6f, 0.0f, "H"),   
+        makeAtom(0.0f, -1.6f, 0.0f, "H")   
+    };
+    h2so4.bonds = {
+        {0,1}, {0,2}, {0,3}, {0,4},  
+        {3,5}, {4,6}                 
+    };
+    moleculeMap['O'] = h2so4;
+    moleculeNamesES["H2SO4"] = "Ácido Sulfúrico";
+
+    Molecule c2h2 = {"C2H2"};
+    c2h2.atoms = {
+        makeAtom(-1.0f, 0.0f, 0.0f, "H"),
+        makeAtom(-0.5f, 0.0f, 0.0f, "C"),
+        makeAtom(0.5f, 0.0f, 0.0f, "C"),
+        makeAtom(1.0f, 0.0f, 0.0f, "H")
+    };
+    c2h2.bonds = {{0,1}, {1,2}, {2,3}};
+    moleculeMap['P'] = c2h2;
+    moleculeNamesES["C2H2"] = "Etilino";
+
+    Molecule c2h4 = {"C2H4"};
+    c2h4.atoms = {
+        makeAtom(-0.7f, 0.0f, 0.0f, "C"),
+        makeAtom(0.7f, 0.0f, 0.0f, "C"),
+        makeAtom(-1.3f, 0.9f, 0.0f, "H"),
+        makeAtom(-1.3f, -0.9f, 0.0f, "H"),
+        makeAtom(1.3f, 0.9f, 0.0f, "H"),
+        makeAtom(1.3f, -0.9f, 0.0f, "H")
+    };
+    c2h4.bonds = {{0,1}, {0,2}, {0,3}, {1,4}, {1,5}};
+    moleculeMap['A'] = c2h4;
+    moleculeNamesES["C2H4"] = "Eteno";
+
+    Molecule nacl = {"NaCl"};
+    nacl.atoms = {
+        makeAtom(-0.5f, 0.0f, 0.0f, "Na"),
+        makeAtom(0.5f, 0.0f, 0.0f, "Cl")
+    };
+    nacl.bonds = {{0,1}};
+    moleculeMap['S'] = nacl;
+    moleculeNamesES["NaCl"] = "Sal (Cloruro de Sodio)";
+
+    Molecule c2h5oh = {"C2H5OH"};
+    c2h5oh.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "C"),
+        makeAtom(1.2f, 0.0f, 0.0f, "C"),
+        makeAtom(2.1f, 0.0f, 0.0f, "O"),
+        makeAtom(-0.3f, 0.9f, 0.0f, "H"),
+        makeAtom(-0.3f, -0.5f, 0.8f, "H"),
+        makeAtom(-0.3f, -0.5f, -0.8f, "H"),
+        makeAtom(1.5f, 0.9f, 0.3f, "H"),
+        makeAtom(1.5f, -0.9f, 0.3f, "H"),
+        makeAtom(2.7f, 0.1f, 0.0f, "H")
+    };
+    c2h5oh.bonds = {{0,1}, {1,2}, {0,3}, {0,4}, {0,5}, {1,6}, {1,7}, {2,8}};
+    moleculeMap['D'] = c2h5oh;
+    moleculeNamesES["C2H5OH"] = "Etanol";
+
+     Molecule ch2o = {"CH2O"};
+    ch2o.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "C"),
+        makeAtom(1.0f, 0.0f, 0.0f, "O"),
+        makeAtom(-0.6f, 0.9f, 0.0f, "H"),
+        makeAtom(-0.6f, -0.9f, 0.0f, "H")
+    };
+    ch2o.bonds = {{0,1}, {0,2}, {0,3}};
+    moleculeMap['F'] = ch2o;
+    moleculeNamesES["CH2O"] = "Formaldehído";
+
+    Molecule no = {"NO"};
+    no.atoms = {
+        makeAtom(-0.5f, 0.0f, 0.0f, "N"),
+        makeAtom(0.5f, 0.0f, 0.0f, "O")
+    };
+    no.bonds = {{0,1}};
+    moleculeMap['G'] = no;
+    moleculeNamesES["NO"] = "Óxido Nítrico";
+
+    Molecule co = {"CO"};
+    co.atoms = {
+        makeAtom(-0.6f, 0.0f, 0.0f, "C"),
+        makeAtom(0.6f, 0.0f, 0.0f, "O")
+    };
+    co.bonds = {{0,1}};
+    moleculeMap['H'] = co;
+    moleculeNamesES["CO"] = "Monóxido de Carbono";
+
+    Molecule nh4 = {"NH4"};
+    nh4.atoms = {
+        makeAtom(0.0f, 0.0f, 0.0f, "N"),
+        makeAtom(0.7f, 0.7f, 0.0f, "H"),
+        makeAtom(-0.7f, 0.7f, 0.0f, "H"),
+        makeAtom(0.0f, -0.7f, 0.7f, "H"),
+        makeAtom(0.0f, -0.7f, -0.7f, "H")
+    };
+    nh4.bonds = {{0,1}, {0,2}, {0,3}, {0,4}};
+    moleculeMap['J'] = nh4;
+    moleculeNamesES["NH4"] = "Ion Amonio";
+
+    Molecule naoh = {"NaOH"};
+    naoh.atoms = {
+        makeAtom(-1.0f, 0.0f, 0.0f, "Na"),
+        makeAtom(0.0f, 0.0f, 0.0f, "O"),
+        makeAtom(1.0f, 0.0f, 0.0f, "H")
+    };
+    naoh.bonds = {{0,1}, {1,2}};
+    moleculeMap['K'] = naoh;
+    moleculeNamesES["NaOH"] = "Hidróxido de Sodio";
+
+    Molecule hcl = {"HCl"};
+    hcl.atoms = {
+        makeAtom(-0.4f, 0.0f, 0.0f, "H"),
+        makeAtom(0.4f, 0.0f, 0.0f, "Cl")
+    };
+    hcl.bonds = {{0,1}};
+    moleculeMap['L'] = hcl;
+    moleculeNamesES["HCl"] = "Ácido Clorhídrico";
+}
+
+
+void drawBond(const Atom& a1, const Atom& a2) {
+    glLineWidth(6.0f);
+    glBegin(GL_LINES);
+    glColor3f(a1.r, a1.g, a1.b);
+    glVertex3f(a1.x, a1.y, a1.z);
+    glColor3f(a2.r, a2.g, a2.b);
+    glVertex3f(a2.x, a2.y, a2.z);
+    glEnd();
+}
+
+
+void drawAtomsAndBonds(const Molecule& mol) {
+    for (auto& bond : mol.bonds)
+        drawBond(mol.atoms[bond.first], mol.atoms[bond.second]);
+    for (auto& atom : mol.atoms) {
+        glPushMatrix();
+        glTranslatef(atom.x, atom.y, atom.z);
+        glColor3f(atom.r, atom.g, atom.b);
+        glutSolidSphere(atom.radius, 24, 24);
+        glPopMatrix();
+    }
+}
+
+void drawText(float x, float y, const char* text, void* font = GLUT_BITMAP_HELVETICA_12) {
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, windowWidth, 0, windowHeight);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+
+    glRasterPos2f(x, y);
+    for (const char* p = text; *p; ++p)
+        glutBitmapCharacter(font, *p);
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LIGHTING);
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void drawUIOverlay() {
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, windowWidth, 0, windowHeight);
+
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glColor3f(1, 1, 1);
+
+    std::string label = "Molecula: " + moleculeNamesES[currentLabel];
+    int titleX = (windowWidth - glutBitmapLength(GLUT_BITMAP_HELVETICA_18, (const unsigned char*)label.c_str())) / 2;
+    drawText((float)titleX, (float)(windowHeight - 30), label.c_str(), GLUT_BITMAP_HELVETICA_18);
+
+    int keyX = windowWidth - 200;
+    int keyY = windowHeight - 60;
+    drawText((float)keyX, (float)(keyY -= 18), "Teclas:");
+    for (const auto& [key, mol] : moleculeMap) {
+        std::string line = "[" + std::string(1, key) + "] " + moleculeNamesES[mol.name];
+        drawText((float)keyX, (float)(keyY -= 18), line.c_str());
+    }
+
+    int colorX = 20;
+    int colorY = 150;
+    drawText((float)colorX, (float)(colorY -= 18), "Colores de atomos:");
+
+    ColorItem colors[] = {
+        {"H: Blanco",     1.0f, 1.0f, 1.0f},
+        {"O: Rojo",       1.0f, 0.0f, 0.0f},
+        {"C: Gris",       0.2f, 0.2f, 0.2f},
+        {"N: Azul",       0.0f, 0.0f, 1.0f},
+        {"Na: Azul claro", 0.4f, 0.4f, 1.0f},
+        {"Cl: Verde",     0.0f, 1.0f, 0.0f},
+        {"Otros: Gris claro", 0.5f, 0.5f, 0.5f}
+    };
+
+    for (const auto& item : colors) {
+        colorY -= 18;
+        glColor3f(item.r, item.g, item.b);
+        glBegin(GL_QUADS);
+        glVertex2f(colorX, colorY);
+        glVertex2f(colorX + 10, colorY);
+        glVertex2f(colorX + 10, colorY + 10);
+        glVertex2f(colorX, colorY + 10);
+        glEnd();
+
+        glColor3f(1, 1, 1);
+        drawText(colorX + 15, (float)colorY + 2, item.label);
+    }
+
+    const char* controls[] = {
+        "Controles:",
+        "Arrastrar mouse: rotar",
+        "+ / - : Zoom",
+        "R : Reset vista",
+        "ESC : Salir"
+    };
+    int ctrlX = windowWidth - 250;
+    int ctrlY = 100;
+    for (const char* line : controls)
+        drawText((float)ctrlX, (float)(ctrlY -= 18), line);
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glPopMatrix();
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+    gluLookAt(0, 0, zoom, 0, 0, 0, 0, 1, 0);
+    glRotatef(rotX, 1, 0, 0);
+    glRotatef(rotY, 0, 1, 0);
+    drawAtomsAndBonds(currentMolecule);
+    drawUIOverlay();
+    glutSwapBuffers();
+}
+
+void reshape(int w, int h) {
+    windowWidth = w; windowHeight = h;
+    glViewport(0, 0, w, h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(60.0, (float)w/h, 1.0, 100.0);
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void mouse(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        isDragging = true;
+        lastX = x;
+        lastY = y;
+    } else {
+        isDragging = false;
+    }
+}
+
+void motion(int x, int y) {
+    if (isDragging) {
+        rotY += (x - lastX) * 0.3f;
+        rotX += (y - lastY) * 0.3f;
+        lastX = x;
+        lastY = y;
+        glutPostRedisplay();
+    }
+}
+
+void keyboard(unsigned char key, int, int) {
+    if (key == 27) exit(0);
+    if (key == '+' || key == '=') zoom = std::max(3.0f, zoom - 0.5f);
+    if (key == '-') zoom = std::min(100.0f, zoom + 1.0f);
+    if (key == 'r' || key == 'R') { zoom = 20.0f; rotX = rotY = 0.0f; }
+    char upperKey = std::toupper(key);
+    if (moleculeMap.count(upperKey)) {
+        currentMolecule = moleculeMap[upperKey];
+        currentLabel = currentMolecule.name;
+    }
+    glutPostRedisplay();
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitWindowSize(windowWidth, windowHeight);
+    glutCreateWindow("Moléculas");
+
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_COLOR_MATERIAL);
+    glShadeModel(GL_SMOOTH);
+
+    GLfloat lightAmbient[]  = {0.2f, 0.2f, 0.2f, 1.0f};
+    GLfloat lightDiffuse[]  = {0.8f, 0.8f, 0.8f, 1.0f};
+    GLfloat lightSpecular[] = {1.0f, 1.0f, 1.0f, 1.0f};
+    GLfloat lightPosition[] = {3.0f, 3.0f, 3.0f, 1.0f};
+
+    glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
+
+    glMaterialfv(GL_FRONT, GL_SPECULAR, lightSpecular);
+    glMateriali(GL_FRONT, GL_SHININESS, 64);
+
+    setupMolecules();
+    currentMolecule = moleculeMap['Q'];
+    currentLabel = currentMolecule.name;
+
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    glutMouseFunc(mouse);
+    glutMotionFunc(motion);
+    glutKeyboardFunc(keyboard);
+    glutIdleFunc(display);
+
+    glutMainLoop();
+    return 0;
+}
